@@ -1,0 +1,806 @@
+#import database
+# ANSI color codes for different outputs
+GREEN = "\033[92m"
+BLUE = "\033[94m"
+YELLOW = "\033[93m"
+RESET = "\033[0m"
+
+# Corrected URL for the raw CSV file
+url = 'https://raw.githubusercontent.com/LUCE-Blockchain/Databases-for-teaching/main/Framingham%20Dataset.csv'
+
+#allow all the columns to be visible
+pd.set_option('display.max_columns', None)
+
+# Read the CSV file from the URL
+print(f"{YELLOW}# Reading the CSV file from the URL...{RESET}")
+df = pd.read_csv(url)
+
+# Display the first few rows to verify
+print(f"{GREEN}# Displaying the first few rows of the dataset to verify:{RESET}")
+print(df.head())
+
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# Calculate the correlation matrix
+correlation_matrix = df.corr()
+
+# Set up the figure size for improved readability
+plt.figure(figsize=(18, 12))
+
+# Create a heatmap to visualize correlations
+sns.heatmap(
+    correlation_matrix,
+    annot=False,  # Hide detailed annotations to avoid clutter
+    cmap='RdBu_r',  # Use diverging colors for better contrast
+    linewidths=1,  # Add gridlines for separation of cells
+    center=0,  # Center the color scale around 0 to highlight positive/negative correlations
+    cbar_kws={'shrink': 0.8, 'label': 'Correlation Coefficient'},  # Customize color bar appearance
+)
+
+for row in range(correlation_matrix.shape[0]):
+    for col in range(correlation_matrix.shape[1]):
+        correlation_value = correlation_matrix.iloc[row, col]
+        if abs(correlation_value) >= 0.5 and row != col:  # Ignore diagonal (correlation of a variable with itself)
+            plt.text(
+                col + 0.5, row + 0.5, f"{correlation_value:.2f}",
+                ha='center', va='center',
+                color='black', fontsize=12, weight='bold'
+            )
+
+
+plt.title('Correlation Heatmap', fontsize=20, weight='bold')
+plt.xticks(fontsize=12, rotation=45, ha='right')
+plt.yticks(fontsize=12, rotation=0)
+
+
+plt.tight_layout()
+
+plt.show()
+
+""".
+
+##Select rows and columns relevant to your research question.
+"""
+
+#selection of relevant rows and columns for research question, put into new dataset
+df_rq=df[['BMI', 'AGE', 'SEX', 'TOTCHOL', 'SYSBP', 'DIABP', 'CURSMOKE','DIABETES', 'BPMEDS', 'HEARTRTE', 'GLUCOSE','ANYCHD','PERIOD']]
+print(df_rq)
+
+pip install ipywidgets matplotlib
+
+""".
+
+.
+
+#**3. Explore and clean the data by:** (30 pt)
+* Identify, report and correct issues with missing data (if any). (10 pt)
+* Identify, report and correct issues with erroneous data (if any). (10 pt)
+* Identify and correct outliers (if any). Explain your reasoning. (10 pt)
+
+It is better to first correct outliers and then handle the missing data.
+
+##Identify, report, correct issues with missing data (if any)
+
+We are looking at **3 types of missing data**:
+1. **Missing Completely at Random (MCAR)**:
+The probability of a value being missing is unrelated to any observed or unobserved data. MCAR means the missing data is purely accidental.
+MCAR data can often be safely imputed using methods like mean, median, or mode imputation since the missingness is not biased.
+2. **Missing at Random (MAR)**:
+The probability of missingness is related to the observed data but not to the missing data itself. For example, older patients might be less likely to provide certain health data, so missing values are related to age, but not necessarily to the missing variable itself.
+Imputation techniques like regression imputation or multiple imputation can be used because the missingness is systematic but still predictable from the observed data.
+3. **Missing Not at Random (MNAR)**:
+The probability of missingness is related to the missing data itself. For example, people with higher BMI might avoid reporting their weight.
+MNAR is the hardest to address, and imputation may introduce bias. Advanced techniques like model-based methods (e.g., pattern mixture models) are needed.
+---
+
+Cathegorization of missing values in this dataset:
+
+Column	Missing Type	Reasoning
+Age	MCAR	Generally easy to report, likely missing due to random error.
+Systolic Blood Pressure (sysBP)	MAR or MCAR	Could be MAR if older or sicker participants avoid measurements, or MCAR if random measurement errors occurred.
+Diastolic Blood Pressure (diaBP)	MAR or MCAR	Similar reasoning to sysBP.
+Cholesterol	MAR or MNAR	Could be MNAR if higher cholesterol individuals are less likely to report, or MAR if related to other variables like age or BMI.
+Smoking	MNAR	People may underreport smoking status due to social stigma.
+BMI	MAR	Missingness likely depends on variables like age or cholesterol, but not on BMI itself.
+
+| Column                     | Missing Type    | Reasoning                                                                                       |
+|----------------------------|-----------------|-------------------------------------------------------------------------------------------------|
+| Age                        | MCAR            | Generally easy to report, likely missing due to random error.                                    |
+| Systolic Blood Pressure (sysBP)  | MAR or MCAR     | Could be MAR if older or sicker participants avoid measurements, or MCAR if random errors occurred. |
+| Diastolic Blood Pressure (diaBP) | MAR or MCAR     | Similar reasoning to sysBP.                                                                      |
+| Cholesterol                | MAR or MNAR     | Could be MNAR if higher cholesterol individuals avoid reporting, or MAR if related to age/BMI.    |
+| Smoking                    | MNAR            | People may underreport smoking status due to social stigma.                                       |
+| BMI                        | MAR             | Missingness likely depends on variables like age or cholesterol, but not on BMI itself.           |
+
+
+
+
+In this project, we are mostly focusing on **MCAR's** and **MAR's**.
+"""
+
+#Identify missing values in dataset
+missing_values = df_rq.isnull().sum().sum()
+if missing_values > 0:
+    print("\033[1;31mWarning: The dataset has {} missing values.\033[0m".format(missing_values))
+else:
+    print("\033[1;32mNo missing values detected in the dataset.\033[0m")
+
+""".
+
+It seems like we have a looot of missing value, which I cannot tell if it due to the nature of data collection or something is wrong with my code. Therefore I will: Lists the columns with missing values again.
+
+Analyze Missingness by Examination Period (PERIOD): I group the data by examination cycle (PERIOD) to understand if missing data is concentrated in certain periods.
+
+And visualize missing data again
+"""
+
+# Check for missing data and display the count
+missing_data = df_rq.isnull().sum()
+print("Missing Data Count:\n", missing_data[missing_data > 0])
+
+# Investigate missing values by examining period and participant subsets
+# Let's check if certain variables are mostly missing in one examination period
+period_missing = df_rq.groupby('PERIOD').apply(lambda x: x.isnull().sum())
+
+# Adjust the figure size for better readability
+plt.figure(figsize=(10, 6))
+
+# Create a heatmap with annotation
+sns.heatmap(period_missing, cmap="coolwarm", annot=True, fmt=".0f", linewidths=0.5, annot_kws={"size": 8}, cbar_kws={'label': 'Count of Missing Values'})
+
+# Improve title and axis labels
+plt.title('Missing Data Across Examination Periods', fontsize=16)
+plt.xlabel('Variables', fontsize=12)
+plt.ylabel('Examination Period', fontsize=12)
+
+# Adjust x-axis labels (rotate them)
+plt.xticks(rotation=45, ha='right', fontsize=10)
+
+# Show the plot
+plt.tight_layout()
+plt.show()
+
+
+# Visualize the percentage of missing data
+missing_percentage = df_rq.isnull().mean() * 100
+
+plt.figure(figsize=(10, 6))
+missing_percentage.plot(kind="bar", color='pink')
+plt.title('Percentage of Missing Data by Variable')
+plt.xlabel('Variables')
+plt.ylabel('Percentage of Missing Data')
+plt.xticks(rotation=90)
+plt.show()
+
+"""**Decision on imputation / drop on variables with lots of missing value**
+
+From the first step we got this column of total missing values: Missing Data Count:
+- TOTCHOL      409
+- BMI           52
+- BPMEDS       593
+- HEARTRTE       6
+- GLUCOSE     1440
+
+Now we choose what to do with the missing values.
+
+**TOTCHOL** (Cholesterol):
+Given that this column has 409 missing values, consider using median imputation or group-based imputation based on age or BMI.
+
+**BMI**:
+WE have 52 missing values, which can be handled with median imputation.
+
+**BPMEDS** (Blood pressure medications):
+With 593 missing values, consider creating a separate we category for "Unknown" if it's categorical.
+
+**HEARTRTE** (Heart rate):
+Only 6 missing values can be easily filled with median imputation.
+
+**GLUCOSE**:
+This has a high missing count (1440). We consider using a ✨more advanced✨ imputation method, such as predicting the value using other relevant features (e.g., age, BMI, etc.) with K-nearest neighbour (KNN).
+"""
+
+for col in df_rq.columns:
+    print(f"'{col}'")
+
+# Strip whitespace from all column names
+df_rq.columns = df_rq.columns.str.strip()
+
+# Check the initial distribution of GLUCOSE
+plt.figure(figsize=(12, 5))
+
+plt.subplot(1, 2, 1)
+sns.histplot(df_rq['GLUCOSE'], bins=30, kde=True)
+plt.title('Distribution of GLUCOSE Before Imputation')
+plt.xlabel('GLUCOSE')
+plt.ylabel('Frequency')
+
+# Create a copy of the DataFrame for KNN imputation
+df_rq_knn = df_rq.copy()
+
+# Instead of dropping 'GLUCOSE', impute all columns including 'GLUCOSE'
+features = df_rq_knn  # Use all columns for imputation
+
+# Initialize KNN imputer
+imputer = KNNImputer(n_neighbors=5)
+
+# Fit the imputer and transform the data
+imputed_data = imputer.fit_transform(features)
+
+# Create a new DataFrame with the imputed values, using original column names
+imputed_df_rq = pd.DataFrame(imputed_data, columns=features.columns)
+
+# No need to assign GLUCOSE back, as it was already imputed in place
+# df_knn['GLUCOSE'] = imputed_df['GLUCOSE']  # This line is removed
+
+# Check the distribution of GLUCOSE after imputation
+plt.subplot(1, 2, 2)
+sns.histplot(imputed_df_rq['GLUCOSE'], bins=30, kde=True)  # Use imputed_df_rq here
+plt.title('Distribution of GLUCOSE After Imputation')
+plt.xlabel('GLUCOSE')
+plt.ylabel('Frequency')
+
+plt.tight_layout()
+plt.show()
+
+"""Seems like we could improve on GLUCOSE quite well with the **KNN imputer**. 😊
+
+Now let's apply imputation for all the other variables:
+
+**Median Imputation**: For variables with a reasonable number of missing values (TOTCHOL, BMI, and HEARTRTE).
+
+**Categorical Imputation** with a New "Unknown" Category: For BPMEDS, as it may be beneficial to keep track of cases where the data is missing.
+
+
+"""
+
+# Impute TOTCHOL (Cholesterol) using median imputation
+median_imputer = SimpleImputer(strategy='median')
+df_rq['TOTCHOL'] = median_imputer.fit_transform(df_rq[['TOTCHOL']])
+
+# Impute BMI using median imputation
+df_rq['BMI'] = median_imputer.fit_transform(df_rq[['BMI']])
+
+# Impute BPMEDS (Blood pressure medications) by adding an "Unknown" category (assuming it’s categorical)
+df_rq['BPMEDS'] = df_rq['BPMEDS'].fillna(-1)  # Using -1 as a placeholder for "Unknown" category
+
+# Impute HEARTRTE (Heart rate) using median imputation
+df_rq['HEARTRTE'] = median_imputer.fit_transform(df_rq[['HEARTRTE']])
+
+# Advanced imputation for GLUCOSE using KNN
+knn_imputer = KNNImputer(n_neighbors=5)
+df_rq_imputed = knn_imputer.fit_transform(df_rq)
+
+# Converting the imputed NumPy array back to a DataFrame
+df_rq = pd.DataFrame(df_rq_imputed, columns=df_rq.columns)
+
+# Preview the first few rows of the imputed dataset
+print(f"{GREEN}# Displaying the first few rows of the dataset to verify:{RESET}")
+print(df_rq.head())
+
+""".
+
+##Identify, report, correct issues with erroneous data (if any)
+
+We decided not to use HDLC and LDLC, as these were only measured in the third period and still contained many missing values.
+"""
+
+#look for typos in binary data columns. All these columns show no outliers or missing values.
+binary_columns = df_rq[['SEX', 'CURSMOKE','DIABETES', 'BPMEDS', 'ANYCHD','PERIOD']]
+
+for col in binary_columns:
+    value_count = df_rq[col].value_counts()
+    print(f"Value counts for {col}:\n{value_count}\n")
+
+""".
+
+##Identify and correct outliers (if any). Explain your reasoning.
+"""
+
+# Color map for the variables
+color_map = {
+    'BMI': 'lightblue',
+    'AGE': 'lightgreen',
+    'TOTCHOL': 'salmon',
+    'SYSBP': 'gold',
+    'DIABP': 'orchid',
+    'HEARTRTE' : 'lightcoral',
+    'GLUCOSE': 'lightpink'
+}
+# Only visualize numerical columns, not binary data from df_rq
+df_rq_numeric = df_rq[['BMI','AGE','TOTCHOL','SYSBP','DIABP','HEARTRTE', 'GLUCOSE']]
+
+# Define the function to plot the selected variable
+def plot_graph(variable):
+    color = color_map.get(variable, 'lightgray')
+    plt.figure(figsize=(10, 8))
+    sns.boxplot(data=df_rq_numeric, y=variable, color=color)
+    plt.title(f'{variable} Graph', fontsize=16)
+    plt.xlabel('Index')
+    plt.ylabel(variable)
+    plt.grid(True)
+    plt.show()
+
+# Create a dropdown widget with the numerical variables
+dropdown = widgets.Dropdown(
+    options=df_rq_numeric.columns,
+    description='Variable:',
+    disabled=False
+)
+
+# Interact function is used to link the dropdown menu to the plot
+interact(plot_graph, variable=dropdown);
+
+"""Use IQR to visualize how many values are outside the Q1 and Q3 range."""
+
+# Select only columns which have outliers (other values are binary, which seen above, had not outliers)
+selected_columns= df_rq [['BMI','AGE','TOTCHOL','SYSBP','DIABP','HEARTRTE', 'GLUCOSE']]
+
+# Function to detect outliers using IQR
+def detect_outliers(df_rq, selected_columns):
+    outliers = {}
+    for col in selected_columns:
+        Q1 = df_rq[col].quantile(0.25)
+        Q3 = df_rq[col].quantile(0.75)
+        IQR = Q3 - Q1
+
+        # Define the outlier bounds
+        lower_bound = Q1 - 1.5 * IQR
+        upper_bound = Q3 + 1.5 * IQR
+
+        # Detect outliers
+        outliers[col] = df_rq[(df_rq[col] < lower_bound) | (df_rq[col] > upper_bound)]
+
+    return outliers
+
+# Detect outliers in the dataset
+outliers = detect_outliers(df_rq, selected_columns)
+
+total_outliers = 0
+
+# Display outliers for each column
+for col, outlier_data in outliers.items():
+    num_outliers_col=len(outlier_data)
+    print(f"Outliers for {col}: {len(outlier_data)}")
+    total_outliers+=num_outliers_col
+
+print(f"Numbers of outliers: {total_outliers}")
+
+# Select only columns which have outliers (other values are binary, which seen above, had not outliers)
+selected_columns= df_rq [['BMI','AGE','TOTCHOL','SYSBP','DIABP','HEARTRTE', 'GLUCOSE']]
+
+# Function to detect outliers using IQR
+def detect_outliers(df_rq, selected_columns):
+    outliers = {}
+    for col in selected_columns:
+        Q1 = df_rq[col].quantile(0.2)
+        Q3 = df_rq[col].quantile(0.8)
+        IQR = Q3 - Q1
+
+        # Define the outlier bounds
+        lower_bound = Q1 - 1.5 * IQR
+        upper_bound = Q3 + 1.5 * IQR
+
+        # Detect outliers
+        outliers[col] = df_rq[(df_rq[col] < lower_bound) | (df_rq[col] > upper_bound)]
+
+    return outliers
+
+# Detect outliers in the dataset
+outliers = detect_outliers(df_rq, selected_columns)
+
+total_outliers = 0
+
+# Display outliers for each column
+for col, outlier_data in outliers.items():
+    num_outliers_col=len(outlier_data)
+    print(f"Outliers for {col}: {len(outlier_data)}")
+    total_outliers+=num_outliers_col
+
+print(f"Numbers of outliers: {total_outliers}")
+
+from itertools import count
+!pip install -q scikit-learn
+import numpy as np
+from sklearn.neighbors import NearestNeighbors
+
+#visualize outliers with K-nearest neighbours
+
+# Initialize the KNN model (use n_neighbors to set the number of neighbors to consider)
+knn = NearestNeighbors(n_neighbors=5)
+
+# Fit the model to your data, using a list of column names instead of a tuple
+knn.fit(df_rq[['BMI','TOTCHOL','SYSBP','DIABP','HEARTRTE', 'GLUCOSE']])
+
+# Calculate the distances to the 5 nearest neighbors for each point
+distances, indices = knn.kneighbors(df_rq[['BMI','TOTCHOL','SYSBP','DIABP','HEARTRTE', 'GLUCOSE']])
+
+# Calculate the mean distance to the k-nearest neighbors to identify outliers
+mean_distances = distances.mean(axis=1)
+
+# Define a threshold for what is considered an outlier, 90th percentile of mean distance in this case:
+threshold = np.percentile(mean_distances, 90)
+
+# Identify outliers (those points with mean distance above the threshold)
+outliers = np.where(mean_distances > threshold)
+
+# Output the results
+print(f"Outlier indices: {outliers[0]}")
+print("Outlier data points:")
+print(df_rq.iloc[outliers[0]])
+print(f"Numbers of outliers: {len(outliers[0])}")
+
+import matplotlib.pyplot as plt
+
+# Plot the mean distances
+plt.plot(mean_distances, marker='o', linestyle='None')
+plt.axhline(y=threshold, color='r', linestyle='--')
+plt.title("Mean Distances to K Nearest Neighbors")
+plt.xlabel("Data Point Index")
+plt.ylabel("Mean Distance")
+plt.show()
+
+# Step 1: Identify outliers using IQR  method
+def detect_outliers(df_rq, column):
+    Q1 = df_rq[column].quantile(0.25)
+    Q3 = df_rq[column].quantile(0.75)
+    IQR = Q3 - Q1
+    lower_bound = Q1 - 1.5 * IQR
+    upper_bound = Q3 + 1.5 * IQR
+    return (df_rq[column] < lower_bound) | (df_rq[column] > upper_bound)
+
+# Step 2: Replace outliers with NaN (for specific columns)
+columns_to_impute = ['BMI','AGE','TOTCHOL','SYSBP','DIABP','HEARTRTE', 'GLUCOSE']  # Specify columns where you want to impute outliers
+df_imputed = df_rq.copy()
+
+for col in columns_to_impute:
+    df_imputed[col] = df[col].where(~detect_outliers(df, col), np.nan)
+
+print("DataFrame with Outliers Replaced by NaN (In Specific Columns):")
+print(df_imputed)
+
+# Step 3: Apply KNN Imputation to replace NaN values in the selected columns
+imputer = KNNImputer(n_neighbors=3)
+
+# Apply KNN imputation only to the columns with outliers
+df_rqi = df_imputed.copy()
+df_rqi[columns_to_impute] = imputer.fit_transform(df_rqi[columns_to_impute])
+
+print("\nDataFrame After KNN Imputation:")
+print(df_rqi)
+
+plt.figure(figsize=(12, 16))
+# Check the initial distribution of Total Cholesterol
+plt.subplot(10, 2, 1)
+sns.histplot(df_rq['TOTCHOL'], bins=30, kde=True)
+plt.title('Distribution of Total Cholesterol Before Imputation')
+plt.xlabel('Total Cholesterol')
+plt.ylabel('Frequency')
+# Check the distribution of Total Cholesterol after imputation
+plt.subplot(10, 2, 2)
+sns.histplot(df_rqi['TOTCHOL'], bins=30, kde=True)
+plt.title('Distribution of Total Cholesterol After Imputation')
+plt.xlabel('Total Cholesterol')
+plt.ylabel('Frequency')
+
+
+# Check the initial distribution of Systolic Bloodpressure
+plt.subplot(10, 2, 3)
+sns.histplot(df_rq['SYSBP'], bins=30, kde=True)
+plt.title('Distribution of Systolic Bloodpressure Before Imputation')
+plt.xlabel('Systolic Bloodpressure')
+plt.ylabel('Frequency')
+# Check the distribution of Systolic Bloodpressure after imputation
+plt.subplot(10, 2, 4)
+sns.histplot(df_rqi['SYSBP'], bins=30, kde=True)
+plt.title('Distribution of Systolic Bloodpressure After Imputation')
+plt.xlabel('Systolic bloodpressure')
+plt.ylabel('Frequency')
+
+
+# Check the initial distribution of Diabolic Bloodpressure
+plt.subplot(10, 2, 5)
+sns.histplot(df_rq['DIABP'], bins=30, kde=True)
+plt.title('Distribution of Diabolic Bloodpressure Before Imputation')
+plt.xlabel('Diabolic Bloodpressure')
+plt.ylabel('Frequency')
+# Check the distribution of Diabolic Bloodpressure after imputation
+plt.subplot(10, 2, 6)
+sns.histplot(df_rqi['DIABP'], bins=30, kde=True)
+plt.title('Distribution of Diabolic Bloodpressure After Imputation')
+plt.xlabel('Diabolic bloodpressure')
+plt.ylabel('Frequency')
+
+# Check the initial distribution of Heart Rate
+plt.subplot(10, 2, 7)
+sns.histplot(df_rq['HEARTRTE'], bins=30, kde=True)
+plt.title('Distribution of Heart Rate Before Imputation')
+plt.xlabel('Heart Rate')
+plt.ylabel('Frequency')
+# Check the distribution of Heart Rate after imputation
+plt.subplot(10, 2, 8)
+sns.histplot(df_rqi['HEARTRTE'], bins=30, kde=True)
+plt.title('Distribution of Heart Rate After Imputation')
+plt.xlabel('Heart Rate')
+plt.ylabel('Frequency')
+
+# Check the initial distribution of Glucose
+plt.subplot(10, 2, 9)
+sns.histplot(df_rq['GLUCOSE'], bins=30, kde=True)
+plt.title('Distribution of Glucose Before Imputation')
+plt.xlabel('Glucose')
+plt.ylabel('Frequency')
+# Check the distribution of Glucose after imputation
+plt.subplot(10, 2, 10)
+sns.histplot(df_rqi['GLUCOSE'], bins=30, kde=True)
+plt.title('Distribution of Glucose After Imputation')
+plt.xlabel('Glucose')
+plt.ylabel('Frequency')
+
+plt.tight_layout()
+plt.show()
+
+""".
+
+.
+
+#**4. Describe and visualize:** (25 pt)
+* Provide a summary of your cohort, this is a description of the final clean data. Make use of a table with descriptive statistics (i.e. means, medians, standard deviations) of important variables such as age, gender, outcome ect. Where possible, use visualisations. (10pt)
+* Make the report interactive: Create at least one interactive visualisation using input from the user. (10pt)
+* Turn your interactive report into an application using GitHub, Voila and Binder.** (5pt)
+
+##Provide a summary of your cohort, description of final clean data
+Use a table of descriptive statistics of important variables + use visualisations
+"""
+
+df_rqi.describe()
+
+# Calculate the proportions of each category
+SEX_proportions = df_rqi['SEX'].value_counts(normalize=True) * 100
+CURSMOKE_proportions = df_rqi['CURSMOKE'].value_counts(normalize=True) * 100
+DIABETES_proportions = df_rqi['DIABETES'].value_counts(normalize=True) * 100
+BPMEDS_proportions = df_rqi['BPMEDS'].value_counts(normalize=True) * 100
+ANYCHD_proportions = df_rqi['ANYCHD'].value_counts(normalize=True) * 100
+PERIOD_proportions = df_rqi['PERIOD'].value_counts(normalize=True) * 100
+
+
+plt.figure(figsize=(12, 16))
+# Barplot of SEX proportion with percentages
+plt.subplot(6, 2, 1)
+ax = SEX_proportions.plot(kind='bar', color=['lightskyblue', 'coral'])
+# Annotate the bars with percentages
+for i, v in enumerate(SEX_proportions):
+    ax.text(i, v + 4, f'{v:.1f}%', ha='center', va='bottom', fontsize=12)
+# Add labels and title
+plt.title('Sex Proportions with Percentages')
+plt.xlabel('Sex (1=male, 2=female)')
+plt.ylabel('Percentage')
+plt.ylim(0, 100)
+plt.xticks(rotation=0)
+
+# Barplot of CURSMOKE proportion with percentages
+plt.subplot(6, 2, 2)
+ax = CURSMOKE_proportions.plot(kind='bar', color=['lightskyblue', 'coral'])
+# Annotate the bars with percentages
+for i, v in enumerate(CURSMOKE_proportions):
+    ax.text(i, v + 4, f'{v:.1f}%', ha='center', va='bottom', fontsize=12)
+# Add labels and title
+plt.title('Current smoking sigarets Proportions with Percentages')
+plt.xlabel('Current smoking sigarets (0=no, 1=yes)')
+plt.ylabel('Percentage')
+plt.ylim(0, 100)
+plt.xticks(rotation=0)
+
+ # Barplot of DIABETES proportion with percentages
+plt.subplot(6, 2, 3)
+ax = DIABETES_proportions.plot(kind='bar', color=['lightskyblue', 'coral'])
+# Annotate the bars with percentages
+for i, v in enumerate(DIABETES_proportions):
+    ax.text(i, v - 5, f'{v:.1f}%', ha='center', va='bottom', fontsize=12)
+# Add labels and title
+plt.title('Diabetes Proportions with Percentages')
+plt.xlabel('Diabetes (0=no, 1=yes)')
+plt.ylabel('Percentage')
+plt.ylim(0, 100)
+plt.xticks(rotation=0)
+
+ # Barplot of BPMEDS proportion with percentages
+plt.subplot(6, 2, 4)
+ax = BPMEDS_proportions.plot(kind='bar', color=['lightskyblue', 'coral', 'yellow'])
+# Annotate the bars with percentages
+for i, v in enumerate(BPMEDS_proportions):
+    ax.text(i, v + 2, f'{v:.1f}%', ha='center', va='bottom', fontsize=12)
+# Add labels and title
+plt.title('Blood pressure medication Proportions with Percentages')
+plt.xlabel('Blood pressure medication (0=no, 1=yes, -1=unknown)')
+plt.ylabel('Percentage')
+plt.ylim(0, 100)
+plt.xticks(rotation=0)
+
+ # Barplot of ANYCHD proportion with percentages
+plt.subplot(6, 2, 5)
+ax = ANYCHD_proportions.plot(kind='bar', color=['lightskyblue', 'coral'])
+# Annotate the bars with percentages
+for i, v in enumerate(ANYCHD_proportions):
+    ax.text(i, v + 4, f'{v:.1f}%', ha='center', va='bottom', fontsize=12)
+# Add labels and title
+plt.title('Any Coronary Heart Disease Proportions with Percentages')
+plt.xlabel('Any Coronary Heart Disease (0=no, 1=yes)')
+plt.ylabel('Percentage')
+plt.ylim(0, 100)
+plt.xticks(rotation=0)
+
+ # Barplot of PERIOD proportion with percentages
+plt.subplot(6, 2, 6)
+ax = PERIOD_proportions.plot(kind='bar', color=['lightskyblue', 'coral'])
+# Annotate the bars with percentages
+for i, v in enumerate(PERIOD_proportions):
+    ax.text(i, v + 4, f'{v:.1f}%', ha='center', va='bottom', fontsize=12)
+# Add labels and title
+plt.title('Period Proportions with Percentages')
+plt.xlabel('Period')
+plt.ylabel('Percentage')
+plt.ylim(0, 100)
+plt.xticks(rotation=0)
+
+
+
+plt.tight_layout()
+plt.show()
+
+import matplotlib.pyplot as plt
+plt.figure(figsize=(15, 10))
+
+# Histograms for each column
+axes = df_rqi.hist(bins=30, figsize=(15, 10), edgecolor='black', grid=False)
+
+# Loop through each axis in the figure and custom parameters
+for ax in axes.flatten():
+    ax.set_xlabel(ax.get_xlabel(), fontsize=12, labelpad=10)
+    ax.set_ylabel('Frequency', fontsize=12, labelpad=10)
+    ax.tick_params(axis='x', labelsize=10, rotation=45)
+    ax.tick_params(axis='y', labelsize=10)
+    ax.set_title(ax.get_title(), fontsize=14)
+
+# Ensuring that labels don't overlap
+plt.tight_layout()
+plt.show()
+
+# Calculate the correlation matrix
+correlation_matrix = df_rqi.corr()
+
+# Set up the figure size for improved readability
+plt.figure(figsize=(9, 6))
+
+# Create a heatmap to visualize correlations
+sns.heatmap(
+    correlation_matrix,
+    annot=False,  # Hide detailed annotations to avoid clutter
+    cmap='RdBu_r',  # Use diverging colors for better contrast
+    linewidths=1,  # Add gridlines for separation of cells
+    center=0,  # Center the color scale around 0 to highlight positive/negative correlations
+    cbar_kws={'shrink': 0.8, 'label': 'Correlation Coefficient'},  # Customize color bar appearance
+)
+
+for row in range(correlation_matrix.shape[0]):
+    for col in range(correlation_matrix.shape[1]):
+        correlation_value = correlation_matrix.iloc[row, col]
+        if abs(correlation_value) >= 0.5 and row != col:  # Ignore diagonal (correlation of a variable with itself)
+            plt.text(
+                col + 0.5, row + 0.5, f"{correlation_value:.2f}",
+                ha='center', va='center',
+                color='black', fontsize=12, weight='bold'
+            )
+
+
+plt.title('Correlation Heatmap', fontsize=20, weight='bold')
+plt.xticks(fontsize=12, rotation=45, ha='right')
+plt.yticks(fontsize=12, rotation=0)
+
+
+plt.tight_layout()
+
+plt.show()
+
+df_rqi.groupby('PERIOD')[['AGE', 'TOTCHOL', 'SYSBP', 'DIABP', 'HEARTRTE', 'GLUCOSE','BMI']].mean().plot(marker='o', figsize=(10, 6))
+plt.title('Average Values of Age, Total Cholesterol, Systolic Bloodpressure, Diastolic Bloodpressure, Heartrate and Glucose Over Examination Periods')
+plt.xlabel('Examination Period')
+plt.ylabel('Average Value')
+plt.grid(True)
+plt.show()
+
+
+
+""".
+
+##Make the report interactive: Create at least one interactive visualisation using input from user
+"""
+
+weight= input("What is your weight in kilograms?")
+height= input("What is your length in meters?")
+weight= float(weight)
+height= float(height)
+bmi= weight/(height*height)
+print(f"Your BMI is {bmi}")
+bmi=int(bmi)
+if bmi < 18.5:
+    print("You are underweight")
+elif bmi<25:
+    print("You are at normal weight")
+elif bmi<30:
+    print("You are overweight")
+else:
+    print("You are obese")
+
+
+
+""".
+
+##Turn your interactive report into an application using GitHub, Voila and Binder.
+"""
+
+
+
+
+
+
+
+""".
+
+.
+
+#**5. Data analysis:** (25 pt)
+* Perform feature engineering on the data to better apply AI models to them (5pt)
+* After splitting the data in a way that you can at a minimum test and train, apply several prediction models to your data. (10pt)
+* Use performance metrics to determine the best model (5 pt)
+* Apply further hyper-parameter tuning, or cross validation if possible. (5 pt)
+
+##Perform feature engineering on the data to better apply AI models to them
+"""
+
+
+
+
+
+
+
+""".
+
+##After splitting the data in a way that you can at a minimum test and train, apply several prediction models to your data.
+"""
+
+
+
+
+
+
+
+""".
+
+##Use performance metrics to determine the best model
+"""
+
+
+
+
+
+
+
+""".
+
+##Apply further hyper-parameter tuning, or cross validation if possible.
+"""
+
+
+
+
+
+
+
+""".
+
+.
+
+#**6. Conclusion:** (5 pt)
+###Summarize the work and the main findings related to the initial research question. (5 pt)
+"""
